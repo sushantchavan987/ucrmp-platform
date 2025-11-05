@@ -1,5 +1,6 @@
 package com.ucrmp.authservice.config;
 
+import com.ucrmp.authservice.filter.JwtAuthenticationFilter; // Import the filter
 import com.ucrmp.authservice.repository.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,23 +9,29 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter; 
 
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private final UserRepository userRepository;
+    // We REMOVE the JwtAuthenticationFilter from here
 
-    // We must inject the UserRepository to find users
+    // The constructor NO LONGER needs the filter
     public SecurityConfig(UserRepository userRepository) {
         this.userRepository = userRepository;
+        // this.jwtAuthFilter = jwtAuthFilter; // REMOVE THIS LINE
     }
 
     @Bean
@@ -32,31 +39,32 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // This bean tells Spring how to load a user by their email
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> {
-            // We use email as the "username"
             com.ucrmp.authservice.entity.User user = userRepository.findByEmail(username)
                     .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
-            
-            // Return Spring Security's User object
+
+            Collection<? extends GrantedAuthority> authorities = user.getRoles().stream()
+                    .map(role -> new SimpleGrantedAuthority(role.getName()))
+                    .collect(Collectors.toList());
+
             return new org.springframework.security.core.userdetails.User(
                     user.getEmail(),
                     user.getPasswordHash(),
-                    new ArrayList<>() // We can add roles here later
+                    authorities
             );
         };
     }
 
-    // This bean creates the AuthenticationManager that AuthServiceImpl needs
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    // INJECT THE FILTER HERE, as a method parameter
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthFilter) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
@@ -65,7 +73,10 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                );
+                )
+                // Use the filter that was passed in as a parameter
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 }
