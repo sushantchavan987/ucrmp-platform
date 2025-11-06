@@ -16,12 +16,16 @@ import com.ucrmp.authservice.repository.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -95,28 +99,28 @@ public class AuthServiceImpl implements AuthService {
         log.info("Attempting login for user: {}", loginRequest.getEmail());
 
         // Step 1: Authenticate the user.
-        // This will now throw BadCredentialsException if it fails,
-        // which will be caught by our GlobalExceptionHandler.
-        authenticationManager.authenticate(
+        Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         loginRequest.getEmail(),
                         loginRequest.getPassword()
                 )
         );
 
-        // Step 2: If authentication is successful, fetch the user.
+        // Step 2: If authentication is successful, fetch our full User entity.
         User user = userRepository.findByEmail(loginRequest.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found after authentication")); // Should not happen
+                .orElseThrow(() -> new RuntimeException("User not found after authentication"));
 
-        // Step 3: Build a UserDetails object from our User entity.
-        UserDetails userDetails = buildUserDetails(user);
+        // Step 3: Extract details for the token.
+        UUID userId = user.getId();
+        String username = user.getEmail();
+        Collection<? extends GrantedAuthority> authorities = buildUserDetails(user).getAuthorities();
 
-        // Step 4: Generate a JWT token using the JwtService.
-        String token = jwtService.generateToken(userDetails);
+        // Step 4: Generate a JWT token with custom claims (User ID and Roles).
+        String token = jwtService.generateToken(userId, username, authorities);
 
         log.info("Login successful, token generated for user: {}", user.getEmail());
         
-        // Step 5: Return the token in our LoginResponse DTO.
+        // Step 5: Return the token.
         return new LoginResponse(token);
     }
 

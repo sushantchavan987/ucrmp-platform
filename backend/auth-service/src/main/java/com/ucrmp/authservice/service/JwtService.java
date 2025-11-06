@@ -6,14 +6,18 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class JwtService {
@@ -23,16 +27,28 @@ public class JwtService {
     private String SECRET_KEY;
 
     // --- Token Generation ---
-    public String generateToken(UserDetails userDetails) {
-        return generateToken(new HashMap<>(), userDetails);
+ // --- Token Generation ---
+
+    /**
+     * Overloaded method to generate a token with custom claims.
+     */
+    public String generateToken(UUID userId, String username, Collection<? extends GrantedAuthority> authorities) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("userId", userId);
+        extraClaims.put("roles", authorities.stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
+        
+        return generateToken(extraClaims, username);
     }
 
-    public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+    /**
+     * Main token generation method.
+     */
+    private String generateToken(Map<String, Object> extraClaims, String username) {
         return Jwts.builder()
                 .setClaims(extraClaims)
-                .setSubject(userDetails.getUsername()) // This is the user's email
+                .setSubject(username) // This is the user's email
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 24)) 
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 24)) // 24 hours
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
