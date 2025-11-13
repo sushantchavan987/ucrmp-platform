@@ -1,0 +1,17 @@
+# Ignore the file containing our secrets
+.env
+
+# Ignore build artifacts
+target/
+build/
+
+# Ignore logs
+*.log
+
+# Ignore IDE files
+.idea/
+*.iml
+.vscode/
+
+# Ignore local system files
+.DS_Store

@@ -31,4 +31,4 @@ eureka:
 # Reads from JWT_SECRET, but has a default.
 app:
   jwt:
-    secret: ${JWT_SECRET:bXktc3VwZXItc2VjdXJlLWp3dC1zZWNyZXQta2V5LWZvci11Y3JtcC1wcm9qZWN0LTIwMjU=}
+    secret: ${JWT_SECRET}
