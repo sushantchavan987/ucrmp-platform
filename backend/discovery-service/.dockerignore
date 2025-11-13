@@ -1,0 +1,13 @@
+# Ignore build artifacts
+target/
+
+# Ignore IDE files
+.idea/
+*.iml
+.vscode/
+
+# Ignore local system files
+.DS_Store
+
+# Ignore logs
+*.log

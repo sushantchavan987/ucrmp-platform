@@ -8,7 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+// IMPORT: This is the new import
+import org.springframework.web.bind.annotation.RequestHeader; 
+// DELETE: import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,13 +28,15 @@ public class ClaimController {
     }
 
     /**
-     * Creates a new claim for the authenticated user.
-     * The user's ID is automatically injected from the JWT principal.
+     * Creates a new claim for the user.
+     * The user's ID is injected from the "X-User-Id" header,
+     * which is securely added by the API Gateway.
      */
     @PostMapping
     public ResponseEntity<ClaimResponse> createClaim(
             @Valid @RequestBody CreateClaimRequest request,
-            @AuthenticationPrincipal UUID userId) {
+            // UPDATED: Read the User ID from the header
+            @RequestHeader("X-User-Id") UUID userId) {
         
         log.info("Received request to create claim for user ID: {}", userId);
         ClaimResponse response = claimService.createClaim(request, userId);
@@ -40,12 +44,13 @@ public class ClaimController {
     }
 
     /**
-     * Gets all claims for the authenticated user.
-     * The user's ID is automatically injected from the JWT principal.
+     * Gets all claims for the user.
+     * The user's ID is injected from the "X-User-Id" header.
      */
     @GetMapping
     public ResponseEntity<List<ClaimResponse>> getClaimsForUser(
-            @AuthenticationPrincipal UUID userId) {
+            // UPDATED: Read the User ID from the header
+            @RequestHeader("X-User-Id") UUID userId) {
         
         log.info("Received request to get all claims for user ID: {}", userId);
         List<ClaimResponse> claims = claimService.getClaimsByUserId(userId);

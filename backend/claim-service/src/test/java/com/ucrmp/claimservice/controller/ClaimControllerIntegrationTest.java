@@ -1,18 +1,15 @@
 package com.ucrmp.claimservice.controller;
 
-// Import your new annotation
-import com.ucrmp.claimservice.config.WithMockJwtUser; 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ucrmp.claimservice.dto.CreateClaimRequest;
 import com.ucrmp.claimservice.model.ClaimType;
 import com.ucrmp.claimservice.repository.ClaimRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-// Removed: import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,11 +18,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
-import java.util.UUID; // Import UUID
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-// Removed: import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-// Removed: import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -59,9 +54,13 @@ class ClaimControllerIntegrationTest {
 
     private final String MOCK_USER_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 
+    @AfterEach
+    void cleanup() {
+        // Clean the database after each test
+        claimRepository.deleteAll();
+    }
+
     @Test
-    // Use your new, powerful annotation
-    @WithMockJwtUser(userId = MOCK_USER_ID, roles = {"ROLE_EMPLOYEE"})
     void createClaim_Success() throws Exception {
         // --- Arrange ---
         CreateClaimRequest request = new CreateClaimRequest();
@@ -72,11 +71,14 @@ class ClaimControllerIntegrationTest {
         // --- Act ---
         mockMvc.perform(post("/api/v1/claims")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(objectMapper.writeValueAsString(request))
+                        // THIS IS THE FIX: We now manually add the header
+                        // to simulate the API Gateway.
+                        .header("X-User-Id", MOCK_USER_ID)) 
         // --- Assert (The HTTP Response) ---
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.amount").value(120.50))
-                .andExpect(jsonPath("$.userId").value(MOCK_USER_ID)); // Assert the user ID
+                .andExpect(jsonPath("$.userId").value(MOCK_USER_ID));
 
         // --- Assert (The Database) ---
         assertEquals(1, claimRepository.findAll().size());
@@ -84,8 +86,6 @@ class ClaimControllerIntegrationTest {
     }
 
     @Test
-    // Add the annotation here to fix the 403 error
-    @WithMockJwtUser 
     void createClaim_ValidationFails_ReturnsBadRequest() throws Exception {
         // --- Arrange ---
         CreateClaimRequest badRequest = new CreateClaimRequest();
@@ -95,16 +95,20 @@ class ClaimControllerIntegrationTest {
         // --- Act & Assert ---
         mockMvc.perform(post("/api/v1/claims")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(badRequest)))
-                .andExpect(status().isBadRequest()) // This will now be 400
-                .andExpect(jsonPath("$.message").exists()); 
+                        .content(objectMapper.writeValueAsString(badRequest))
+                        // We still need to add the header, or it will fail
+                        // for the wrong reason (Missing Header).
+                        .header("X-User-Id", MOCK_USER_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
-    void getClaimsForUser_RequiresAuthentication() throws Exception {
+    void getClaimsForUser_Fails_WhenHeaderIsMissing() throws Exception {
         // --- Act & Assert ---
-        // This test remains the same. No authentication is provided.
+        // Perform a GET request *without* the "X-User-Id" header
+        // This proves our endpoint is protected by the header requirement.
         mockMvc.perform(get("/api/v1/claims"))
-                .andExpect(status().isForbidden()); // It should correctly fail with 403
+                .andExpect(status().isBadRequest()); // Expect 400 Bad Request
     }
 }

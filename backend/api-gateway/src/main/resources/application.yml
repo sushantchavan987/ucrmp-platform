@@ -1,0 +1,34 @@
+server:
+  port: 8080 # The Gateway runs on the standard "Front Door" port
+
+spring:
+  application:
+    name: api-gateway # Its own name for registering with Eureka
+  
+  cloud:
+    gateway:
+      # This enables dynamic routing based on Eureka
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true # Use lowercase names (e.g., "auth-service")
+      
+      #
+      # The 'routes:' and 'default-filters:' sections are now GONE.
+      # All routing logic is now handled in GatewayConfig.java
+      #
+
+# --- EUREKA CLIENT CONFIGURATION ---
+# Tell this service where the "phone book" is.
+# It reads from the DISCOVERY_HOST variable, but defaults to 'localhost'
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${DISCOVERY_HOST:localhost}:8761/eureka
+
+# --- JWT CONFIGURATION ---
+# The secret key to validate tokens.
+# Reads from JWT_SECRET, but has a default.
+app:
+  jwt:
+    secret: ${JWT_SECRET:bXktc3VwZXItc2VjdXJlLWp3dC1zZWNyZXQta2V5LWZvci11Y3JtcC1wcm9qZWN0LTIwMjU=}

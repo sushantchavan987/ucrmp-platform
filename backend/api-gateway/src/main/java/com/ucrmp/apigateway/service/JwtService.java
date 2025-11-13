@@ -1,4 +1,4 @@
-package com.ucrmp.claimservice.service;
+package com.ucrmp.apigateway.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import java.security.Key;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -21,26 +20,32 @@ public class JwtService {
     private String SECRET_KEY;
 
     // --- Token Validation and Parsing Methods ---
-
     public boolean isTokenValid(String token) {
-        return !isTokenExpired(token);
+        try {
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            // Log the exception (e.g., malformed token, signature invalid)
+            return false;
+        }
     }
 
     private boolean isTokenExpired(String token) {
-        return extractClaim(token, Claims::getExpiration).before(new Date());
+        return extractExpiration(token).before(new Date());
+    }
+
+    private Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
     }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
 
-    // --- NEW: Method to extract the User ID ---
     public UUID extractUserId(String token) {
         String userIdStr = extractClaim(token, claims -> claims.get("userId", String.class));
         return UUID.fromString(userIdStr);
     }
 
-    // --- NEW: Method to extract Roles ---
     @SuppressWarnings("unchecked")
     public List<String> extractRoles(String token) {
         return extractClaim(token, claims -> claims.get("roles", List.class));
