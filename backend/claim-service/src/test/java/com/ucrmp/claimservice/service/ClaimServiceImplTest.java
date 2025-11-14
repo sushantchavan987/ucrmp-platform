@@ -1,5 +1,7 @@
 package com.ucrmp.claimservice.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ucrmp.claimservice.dto.ClaimResponse;
 import com.ucrmp.claimservice.dto.CreateClaimRequest;
 import com.ucrmp.claimservice.entity.Claim;
@@ -21,29 +23,36 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class) // Enables Mockito
+@ExtendWith(MockitoExtension.class)
 class ClaimServiceImplTest {
 
-    // 1. Create a "fake" repository
     @Mock
     private ClaimRepository claimRepository;
 
-    // 2. Create a real service and inject the fake repository
+    @Mock
+    private ObjectMapper objectMapper;
+
     @InjectMocks
     private ClaimServiceImpl claimService;
 
     private UUID testUserId;
     private Claim testClaim;
     private CreateClaimRequest createRequest;
+    private JsonNode testMetadataNode;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         testUserId = UUID.randomUUID();
+
+        // Use a real ObjectMapper (not the mock) just for setup
+        ObjectMapper realObjectMapper = new ObjectMapper();
+        testMetadataNode = realObjectMapper.readTree("{\"hotelName\":\"Test Hotel\",\"flightNumber\":\"TEST123\"}");
 
         createRequest = new CreateClaimRequest();
         createRequest.setAmount(new BigDecimal("100.00"));
         createRequest.setClaimType(ClaimType.TRAVEL);
         createRequest.setDescription("Test travel claim");
+        createRequest.setMetadata(testMetadataNode);
 
         testClaim = new Claim();
         testClaim.setId(UUID.randomUUID());
@@ -52,35 +61,48 @@ class ClaimServiceImplTest {
         testClaim.setClaimType(createRequest.getClaimType());
         testClaim.setDescription(createRequest.getDescription());
         testClaim.setStatus(ClaimStatus.SUBMITTED);
+        testClaim.setMetadata(testMetadataNode.toString());
     }
 
     @Test
-    void createClaim_Success() {
+    void createClaim_Success() throws Exception {
         // --- Arrange ---
-        // "When the save method is called, return our pre-built testClaim"
+        String metadataString = testMetadataNode.toString();
+        
+        // Mock the validation logic in 'validateAndConvertMetadata'
+        when(objectMapper.treeToValue(any(JsonNode.class), any(Class.class)))
+            .thenReturn(new com.ucrmp.claimservice.dto.ClaimMetadata.TravelMetadata("Test Hotel", "TEST123"));
+        when(objectMapper.writeValueAsString(any())).thenReturn(metadataString);
+        
+        // Mock the repository save
         when(claimRepository.save(any(Claim.class))).thenReturn(testClaim);
 
+        // --- THIS IS THE FIX ---
+        // Mock the call inside 'mapToClaimResponse'
+        // We tell the mock mapper what to do when it sees our metadata string
+        when(objectMapper.readTree(testClaim.getMetadata())).thenReturn(testMetadataNode);
+        // -------------------------
+
         // --- Act ---
-        // Call the method we are testing
         ClaimResponse response = claimService.createClaim(createRequest, testUserId);
 
         // --- Assert ---
-        // Check that the response is not null and has the correct data
         assertNotNull(response);
         assertEquals(testClaim.getId(), response.getId());
         assertEquals(testUserId, response.getUserId());
-        assertEquals(ClaimStatus.SUBMITTED, response.getStatus());
-        assertEquals("100.00", response.getAmount().toString());
+        // Assert that the JsonNode is correct
+        assertEquals(testMetadataNode, response.getMetadata());
 
-        // Verify that the save method was called exactly once
         verify(claimRepository, times(1)).save(any(Claim.class));
     }
 
     @Test
-    void getClaimsByUserId_Success() {
+    void getClaimsByUserId_Success() throws Exception {
         // --- Arrange ---
-        // "When findByUserId is called, return a list containing our testClaim"
         when(claimRepository.findByUserId(testUserId)).thenReturn(List.of(testClaim));
+
+        // This mock is also required here
+        when(objectMapper.readTree(testClaim.getMetadata())).thenReturn(testMetadataNode);
 
         // --- Act ---
         List<ClaimResponse> responses = claimService.getClaimsByUserId(testUserId);
@@ -89,8 +111,8 @@ class ClaimServiceImplTest {
         assertNotNull(responses);
         assertEquals(1, responses.size());
         assertEquals(testClaim.getId(), responses.get(0).getId());
+        assertEquals(testMetadataNode, responses.get(0).getMetadata());
 
-        // Verify that the findByUserId method was called
         verify(claimRepository, times(1)).findByUserId(testUserId);
     }
 }

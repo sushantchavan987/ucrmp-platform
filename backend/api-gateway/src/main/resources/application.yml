@@ -1,34 +1,47 @@
 server:
-  port: 8080 # The Gateway runs on the standard "Front Door" port
+  port: 8080
 
 spring:
   application:
-    name: api-gateway # Its own name for registering with Eureka
-  
+    name: api-gateway
   cloud:
     gateway:
-      # This enables dynamic routing based on Eureka
+      # --- NEW: GLOBAL CORS CONFIGURATION ---
+      # This is the "Frontend Blocker" fix.
+      globalcors:
+        cors-configurations:
+          '[/**]': # Apply this policy to ALL routes (/**)
+            # This is the address our React app will run on
+            allowed-origins: "http://localhost:5173"
+            allowed-methods:
+              - "GET"
+              - "POST"
+              - "PUT"
+              - "DELETE"
+              - "OPTIONS" # Required for "preflight" requests
+            allowed-headers:
+              - "Authorization" # Allow the JWT token header
+              - "Content-Type"  # Allow JSON bodies
+              - "X-User-Id"     # Allow our custom headers
+              - "X-User-Roles"
+            allow-credentials: true
+      # ------------------------------------
+
       discovery:
         locator:
           enabled: true
-          lower-case-service-id: true # Use lowercase names (e.g., "auth-service")
+          lower-case-service-id: true
       
-      #
-      # The 'routes:' and 'default-filters:' sections are now GONE.
-      # All routing logic is now handled in GatewayConfig.java
-      #
+      # NOTE: All routing is now in GatewayConfig.java
+      # The 'routes:' and 'default-filters:' sections are not here.
 
 # --- EUREKA CLIENT CONFIGURATION ---
-# Tell this service where the "phone book" is.
-# It reads from the DISCOVERY_HOST variable, but defaults to 'localhost'
 eureka:
   client:
     service-url:
       defaultZone: http://${DISCOVERY_HOST:localhost}:8761/eureka
 
 # --- JWT CONFIGURATION ---
-# The secret key to validate tokens.
-# Reads from JWT_SECRET, but has a default.
 app:
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET} # This is mandatory, no default

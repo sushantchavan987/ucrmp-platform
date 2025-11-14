@@ -19,9 +19,9 @@ public class Claim {
     private UUID id;
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId; // This links to the User in auth-service
+    private UUID userId; 
 
-    @Enumerated(EnumType.STRING) // Stores the enum as a string (e.g., "TRAVEL")
+    @Enumerated(EnumType.STRING) 
     @Column(name = "claim_type", nullable = false)
     private ClaimType claimType;
 
@@ -34,6 +34,11 @@ public class Claim {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    // --- NEW FIELD ---
+    @Column(columnDefinition = "json")
+    private String metadata;
+    // -----------------
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -60,6 +65,12 @@ public class Claim {
     public void setStatus(ClaimStatus status) { this.status = status; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    // --- NEW GETTER/SETTER ---
+    public String getMetadata() { return metadata; }
+    public void setMetadata(String metadata) { this.metadata = metadata; }
+    // -------------------------
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

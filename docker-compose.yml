@@ -63,6 +63,8 @@ services:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - DISCOVERY_HOST=${DISCOVERY_HOST}
       - JWT_SECRET=${JWT_SECRET}
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD}
     networks:
       - ucrmp-net
     depends_on:
