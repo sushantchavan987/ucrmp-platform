@@ -4,6 +4,10 @@
 # Ignore build artifacts
 target/
 build/
+backend/auth-service/target/
+backend/claim-service/target/
+backend/api-gateway/target/
+backend/discovery-service/target/
 
 # Ignore logs
 *.log
