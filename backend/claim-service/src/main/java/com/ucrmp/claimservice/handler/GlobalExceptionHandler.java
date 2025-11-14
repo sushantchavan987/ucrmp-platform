@@ -2,6 +2,11 @@ package com.ucrmp.claimservice.handler;
 
 import com.ucrmp.claimservice.dto.ErrorResponse;
 import com.ucrmp.claimservice.exception.ClaimNotFoundException;
+
+// --- NEW IMPORT ---
+import jakarta.validation.ConstraintViolationException;
+// ------------------
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -20,7 +25,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleClaimNotFoundException(
             ClaimNotFoundException ex, 
             WebRequest request) {
-
+        
         ErrorResponse errorResponse = new ErrorResponse(
                 HttpStatus.NOT_FOUND.value(),
                 LocalDateTime.now(),
@@ -35,8 +40,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleValidationExceptions(
             MethodArgumentNotValidException ex, 
             WebRequest request) {
-
-        // Get all validation error messages
+        
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining(", "));
@@ -50,12 +54,29 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
+    // --- NEW HANDLER ---
+    // This catches validation failures from our *manual* validation in the service
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolationException(
+            ConstraintViolationException ex, 
+            WebRequest request) {
+        
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                LocalDateTime.now(),
+                ex.getMessage(), // This will contain our "Validation failed: ..." message
+                request.getDescription(false)
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+    // -------------------
+
     // A fallback handler for all other RuntimeExceptions
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(
             RuntimeException ex, 
             WebRequest request) {
-
+        
         ErrorResponse errorResponse = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 LocalDateTime.now(),
