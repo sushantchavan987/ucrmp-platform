@@ -1,33 +1,45 @@
-# ---------
-# Stage 1: The "Build" Stage
-# ---------
-# Use a full JDK to build the app
+# -------------------------------------------------------------------
+# STAGE 1: BUILDER (Cache & Compile)
+# -------------------------------------------------------------------
 FROM eclipse-temurin:21-jdk-jammy AS builder
 WORKDIR /app
 
-# Copy build files
+# 1. Cache Dependencies
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
-
-# Download dependencies (for layer caching)
+# Ensure mvnw is executable
+RUN chmod +x mvnw
 RUN ./mvnw dependency:go-offline
 
-# Copy source code and build
+# 2. Compile Code
 COPY src ./src
 RUN ./mvnw package -DskipTests
 
-# ---------
-# Stage 2: The "Run" Stage
-# ---------
-# Use a minimal JRE for a small, secure image
+# -------------------------------------------------------------------
+# STAGE 2: RUNNER (Secure & Optimized)
+# -------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-jammy
+
+# 1. Create a Non-Root User (Security Best Practice)
+RUN groupadd -r spring && useradd -r -g spring spring
+
+# 2. Set working directory and ownership
 WORKDIR /app
+RUN chown spring:spring /app
 
-# Copy the built .jar from the builder stage
-COPY --from=builder /app/target/*.jar app.jar
+# 3. Copy JAR from builder
+COPY --from=builder --chown=spring:spring /app/target/*.jar app.jar
 
-# Expose the gateway's port
+# 4. Switch to Non-Root User
+USER spring:spring
+
+# 5. JVM Memory Optimization (Prevents OOMKilled in K8s)
+# -XX:MaxRAMPercentage=75.0 : Uses 75% of available container memory
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+
+# 6. Expose Port (Documentation Only - UPDATE THIS PER SERVICE)
+# Gateway: 8080 | Auth: 8081 | Claim: 8082 | Discovery: 8761
 EXPOSE 8080
 
-# Run the application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 7. Start App
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

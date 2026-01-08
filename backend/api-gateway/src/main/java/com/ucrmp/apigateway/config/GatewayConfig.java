@@ -30,15 +30,16 @@ public class GatewayConfig {
     public RouteLocator gatewayRoutes(RouteLocatorBuilder builder) {
         return builder.routes()
                 
-                // --- Route 1: Auth Service (Public) ---
+                // --- Route 1: Auth Service (Direct K8s DNS) ---
                 .route("auth-service", r -> r.path("/api/v1/auth/**")
-                        .uri("lb://AUTH-SERVICE")) // Just route it
+                        // STOP using lb:// (Eureka)
+                        // START using http://<service-name>:<port> (K8s DNS)
+                        .uri("http://auth-service:8081")) 
                 
-                // --- Route 2: Claim Service (Secured) ---
+                // --- Route 2: Claim Service (Direct K8s DNS) ---
                 .route("claim-service", r -> r.path("/api/v1/claims/**")
-                        // Use the bean method we just defined
                         .filters(f -> f.filter(authenticationFilter().apply(new AuthenticationFilter.Config())))
-                        .uri("lb://CLAIM-SERVICE"))
+                        .uri("http://claim-service:8082"))
                 
                 .build();
     }

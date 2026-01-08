@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: ucrmp-dev
+spec:
+  type: ClusterIP
+  selector:
+    app: auth-service
+  ports:
+    - port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: ucrmp-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: sushantc041/ucrmp-auth:v1.0.6
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            # 🚨 NETWORK FIX: Prefer IP for Eureka
+            - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
+              value: "true"
+            # Connections
+            - name: AUTH_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: AUTH_DB_HOST
+            - name: AUTH_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: AUTH_DB_NAME
+            - name: DISCOVERY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: DISCOVERY_HOST
+            # Secrets
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: mysql-root-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: jwt-secret
+
+          # Resource Limits (To keep your laptop happy)
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 5

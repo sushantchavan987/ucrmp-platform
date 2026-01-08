@@ -8,19 +8,18 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.UUID;
 
-
+// This class has NO @Component. It is created as a @Bean in GatewayConfig.
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
     private final RouterValidator validator;
     private final JwtService jwtService;
-
+    
     public AuthenticationFilter(RouterValidator validator, JwtService jwtService) {
         super(Config.class);
         this.validator = validator;
@@ -34,7 +33,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
             // 1. Check if the endpoint is public (not secured)
             if (validator.isSecured.test(request)) {
-
+                
                 // 2. It's a secured endpoint, so check for auth header
                 if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                     return this.onError(exchange, "Missing authorization header", HttpStatus.UNAUTHORIZED);
@@ -48,8 +47,13 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 String token = authHeader.substring(7);
 
                 // 3. Validate the token
-                if (!jwtService.isTokenValid(token)) {
-                    return this.onError(exchange, "Token is not valid", HttpStatus.UNAUTHORIZED);
+                try {
+                    if (!jwtService.isTokenValid(token)) {
+                        return this.onError(exchange, "Token is not valid", HttpStatus.UNAUTHORIZED);
+                    }
+                } catch (Exception e) {
+                    // This catches expired tokens, malformed tokens, etc.
+                    return this.onError(exchange, "Token validation failed: " + e.getMessage(), HttpStatus.UNAUTHORIZED);
                 }
 
                 // 4. Token is valid! Extract claims and add them as headers
@@ -61,9 +65,14 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 ServerHttpRequest newRequest = request.mutate()
                         .header("X-User-Id", userId.toString())
                         .header("X-User-Email", userEmail)
+                        
+                        // --- THIS IS THE FIX ---
+                        // We now correctly add the roles as a comma-separated string
                         .header("X-User-Roles", String.join(",", roles))
+                        // -----------------------
+                        
                         .build();
-
+                
                 return chain.filter(exchange.mutate().request(newRequest).build());
             }
 
@@ -71,15 +80,13 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             return chain.filter(exchange);
         };
     }
-
+    
     private Mono<Void> onError(ServerWebExchange exchange, String err, HttpStatus httpStatus) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(httpStatus);
-        // You can set a JSON error body here if you want
+        // We could also write a proper JSON error to the response body here
         return response.setComplete();
     }
-
-    public static class Config {
-        // Empty config class
-    }
+    
+    public static class Config {}
 }

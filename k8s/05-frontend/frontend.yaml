@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ucrmp-frontend
+  namespace: ucrmp-dev
+spec:
+  type: ClusterIP       # 🚨 Internal Only
+  selector:
+    app: ucrmp-frontend
+  ports:
+    - port: 8080
+      targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ucrmp-frontend
+  namespace: ucrmp-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ucrmp-frontend
+  template:
+    metadata:
+      labels:
+        app: ucrmp-frontend
+    spec:
+      containers:
+        - name: ucrmp-frontend
+          # We use the v1.0.0 image (the one working in Docker)
+          image: sushantc041/ucrmp-frontend:v1.0.2
+          ports:
+            - containerPort: 8080
+          env:
+            # 🚨 THE MAGIC: We override the URL here.
+            # Your env.sh script will pick this up and write it to env-config.js
+            - name: VITE_API_BASE_URL
+              value: "/api/v1"

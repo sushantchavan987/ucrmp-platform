@@ -1,26 +1,30 @@
 services:
-
-  # --- 1. Discovery Service (The "Phone Book") ---
+  # --- 1. DISCOVERY SERVICE (The Phone Book) ---
   discovery-service:
     build:
-      context: ./backend/discovery-service # Path to its Dockerfile
+      context: ./backend/discovery-service
     container_name: discovery-service
     ports:
-      - "8761:8761" # Map host port 8761 to container port 8761
+      - "8761:8761"
     environment:
       - SPRING_APPLICATION_NAME=discovery-service
     networks:
       - ucrmp-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # --- 2. Auth Database (MySQL) ---
+  # --- 2. DATABASES ---
   auth-db:
-    image: mysql:8.0 # Use the official MySQL 8.0 image
+    image: mysql:8.0
     container_name: auth-db
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=${AUTH_DB_NAME}
     ports:
-      - "3308:3306" # <-- FIXED! Host port 3308 -> Container port 3306
+      - "3308:3306"
     volumes:
       - auth-db-data:/var/lib/mysql
     networks:
@@ -30,7 +34,6 @@ services:
       timeout: 10s
       retries: 10
 
-  # --- 3. Claim Database (MySQL) ---
   claim-db:
     image: mysql:8.0
     container_name: claim-db
@@ -38,7 +41,7 @@ services:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=${CLAIM_DB_NAME}
     ports:
-      - "3309:3306" # <-- FIXED! Host port 3309 -> Container port 3306
+      - "3309:3306"
     volumes:
       - claim-db-data:/var/lib/mysql
     networks:
@@ -48,7 +51,7 @@ services:
       timeout: 10s
       retries: 10
 
-  # --- 4. Auth Service ---
+  # --- 3. BACKEND MICROSERVICES ---
   auth-service:
     build:
       context: ./backend/auth-service
@@ -56,7 +59,6 @@ services:
     ports:
       - "8081:8081"
     environment:
-      # Inject variables from our .env file!
       - SPRING_APPLICATION_NAME=auth-service
       - AUTH_DB_HOST=${AUTH_DB_HOST}
       - AUTH_DB_NAME=${AUTH_DB_NAME}
@@ -69,11 +71,10 @@ services:
       - ucrmp-net
     depends_on:
       auth-db:
-        condition: service_healthy # Wait for auth-db to be healthy
+        condition: service_healthy
       discovery-service:
-        condition: service_started # Wait for discovery-service to start
+        condition: service_healthy
 
-  # --- 5. Claim Service ---
   claim-service:
     build:
       context: ./backend/claim-service
@@ -93,15 +94,14 @@ services:
       claim-db:
         condition: service_healthy
       discovery-service:
-        condition: service_started
+        condition: service_healthy
 
-  # --- 6. API Gateway (The "Front Door") ---
   api-gateway:
     build:
       context: ./backend/api-gateway
     container_name: api-gateway
     ports:
-      - "8080:8080" # This is the main port for our frontend
+      - "8090:8080"
     environment:
       - SPRING_APPLICATION_NAME=api-gateway
       - DISCOVERY_HOST=${DISCOVERY_HOST}
@@ -109,18 +109,35 @@ services:
     networks:
       - ucrmp-net
     depends_on:
-      - discovery-service
-      - auth-service
-      - claim-service
+      discovery-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      claim-service:
+        condition: service_started
 
-# --- Shared Network ---
-# This creates a private network for all our containers
+  # --- 4. FRONTEND (NEW!) ---
+
+  frontend:
+    build:
+      context: ./frontend
+      # REMOVED: args section is gone!
+    container_name: ucrmp-frontend
+    ports:
+      - "5173:8080"
+    environment:
+      # ✅ RUNTIME CONFIG: This is injected into env-config.js on startup
+      - VITE_API_BASE_URL=http://localhost:8090/api/v1
+    networks:
+      - ucrmp-net
+    depends_on:
+      - api-gateway
+
 networks:
   ucrmp-net:
     driver: bridge
 
-# --- Persistent Data ---
-# This ensures our database data is saved even if we stop the containers
 volumes:
   auth-db-data:
   claim-db-data:
+

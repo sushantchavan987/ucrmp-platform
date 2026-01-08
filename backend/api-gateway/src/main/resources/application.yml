@@ -6,34 +6,10 @@ spring:
     name: api-gateway
   cloud:
     gateway:
-      # --- NEW: GLOBAL CORS CONFIGURATION ---
-      # This is the "Frontend Blocker" fix.
-      globalcors:
-        cors-configurations:
-          '[/**]': # Apply this policy to ALL routes (/**)
-            # This is the address our React app will run on
-            allowed-origins: "http://localhost:5173"
-            allowed-methods:
-              - "GET"
-              - "POST"
-              - "PUT"
-              - "DELETE"
-              - "OPTIONS" # Required for "preflight" requests
-            allowed-headers:
-              - "Authorization" # Allow the JWT token header
-              - "Content-Type"  # Allow JSON bodies
-              - "X-User-Id"     # Allow our custom headers
-              - "X-User-Roles"
-            allow-credentials: true
-      # ------------------------------------
-
       discovery:
         locator:
           enabled: true
           lower-case-service-id: true
-      
-      # NOTE: All routing is now in GatewayConfig.java
-      # The 'routes:' and 'default-filters:' sections are not here.
 
 # --- EUREKA CLIENT CONFIGURATION ---
 eureka:
@@ -44,4 +20,4 @@ eureka:
 # --- JWT CONFIGURATION ---
 app:
   jwt:
-    secret: ${JWT_SECRET} # This is mandatory, no default
+    secret: ${JWT_SECRET}

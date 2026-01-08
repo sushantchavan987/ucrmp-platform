@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: claim-service
+  namespace: ucrmp-dev
+spec:
+  type: ClusterIP
+  selector:
+    app: claim-service
+  ports:
+    - port: 8082
+      targetPort: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claim-service
+  namespace: ucrmp-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claim-service
+  template:
+    metadata:
+      labels:
+        app: claim-service
+    spec:
+      containers:
+        - name: claim-service
+          image: sushantc041/ucrmp-claim:v1.0.3
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
+              value: "true"
+            # Connections
+            - name: CLAIM_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: CLAIM_DB_HOST
+            - name: CLAIM_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: CLAIM_DB_NAME
+            - name: DISCOVERY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: DISCOVERY_HOST
+            # Secrets
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: mysql-root-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: jwt-secret
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 5

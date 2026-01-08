@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ucrmp-ingress
+  namespace: ucrmp-dev
+  annotations:
+    # We keep regex enabled
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          # --- PATH 1: API TRAFFIC (High Priority) ---
+          # This regex matches "/api" AND "/api/..."
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8090
+
+          # --- PATH 2: FRONTEND TRAFFIC (Catch-All) ---
+          # This matches everything else
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ucrmp-frontend
+                port:
+                  number: 8080

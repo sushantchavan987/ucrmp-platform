@@ -1,44 +1,45 @@
-# ---------
-# Stage 1: The "Build" Stage
-# ---------
-# We use a full Java JDK image (Eclipse Temurin, a popular OpenJDK build) to compile our code.
-# The 'as builder' name is a temporary tag for this stage.
+# -------------------------------------------------------------------
+# STAGE 1: BUILDER (Cache & Compile)
+# -------------------------------------------------------------------
 FROM eclipse-temurin:21-jdk-jammy AS builder
-
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy the Maven wrapper files
+# 1. Cache Dependencies
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
-
-# Download all the dependencies
-# This is a key optimization: we download deps *before* copying code.
-# This way, if our code changes but dependencies don't, Docker reuses this layer.
+# Ensure mvnw is executable
+RUN chmod +x mvnw
 RUN ./mvnw dependency:go-offline
 
-# Copy the rest of our source code
+# 2. Compile Code
 COPY src ./src
-
-# Build the application, skipping the tests (they should run in CI/CD)
 RUN ./mvnw package -DskipTests
 
-# ---------
-# Stage 2: The "Run" Stage
-# ---------
-# We now start from a *fresh*, minimal image that ONLY has the Java Runtime.
-# This makes our final image much smaller and more secure.
+# -------------------------------------------------------------------
+# STAGE 2: RUNNER (Secure & Optimized)
+# -------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-jammy
 
-# Set the working directory
+# 1. Create a Non-Root User (Security Best Practice)
+RUN groupadd -r spring && useradd -r -g spring spring
+
+# 2. Set working directory and ownership
 WORKDIR /app
+RUN chown spring:spring /app
 
-# Copy the application JAR file from the "builder" stage (Stage 1)
-# This is the only file we need from the entire build.
-COPY --from=builder /app/target/*.jar app.jar
+# 3. Copy JAR from builder
+COPY --from=builder --chown=spring:spring /app/target/*.jar app.jar
 
-# Expose the port that our application runs on
+# 4. Switch to Non-Root User
+USER spring:spring
+
+# 5. JVM Memory Optimization (Prevents OOMKilled in K8s)
+# -XX:MaxRAMPercentage=75.0 : Uses 75% of available container memory
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+
+# 6. Expose Port (Documentation Only - UPDATE THIS PER SERVICE)
+# Gateway: 8080 | Auth: 8081 | Claim: 8082 | Discovery: 8761
 EXPOSE 8081
 
-# The command to run when the container starts
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 7. Start App
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

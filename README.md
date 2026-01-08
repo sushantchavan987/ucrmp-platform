@@ -1,140 +1,104 @@
-﻿================================================================================
-                 Unified Claims & Reimbursement Management Platform
-                             (UCRMP Backend V1.1)
-================================================================================
+﻿# Unified Claims & Reimbursement Management Platform (UCRMP)
 
-Project Status: Complete, Hardened & Tested
+**Status:** V1.1 Production Ready
 
-Welcome to the UCRMP backend. This repository contains a complete, enterprise-grade
-microservices system built with Spring Boot, Spring Cloud, and Docker. It is a robust,
-secure, and scalable foundation for a modern claims management application. The backend
-is composed of four independent containerized services and two dedicated databases,
-all orchestrated via a single Docker Compose file.
+## 📋 Overview
+The UCRMP is a cloud-native, microservices-based platform designed to handle claims and reimbursements. It follows a distributed architecture, decoupling the React frontend from the Spring Boot backend services, orchestrated via Kubernetes.
 
---------------------------------------------------------------------------------
-                        HIGH-LEVEL ARCHITECTURE
---------------------------------------------------------------------------------
-This project is "cloud-native" and follows the "Smart Gateway, Dumb Services" pattern.
+This repository is a Monorepo containing the Frontend, Backend microservices, and Infrastructure configuration.
 
-   +------------------+       +-------------------+
-   |                  |       |                   |
-   |   API Gateway     | <---> |  Discovery Service|
-   | ("Smart Front Door")       | ("Phone Book")   |
-   |                  |       |                   |
-   +------------------+       +-------------------+
-           |
-           v
-   +------------------+
-   |                  |
-   |  Claim Service    |
-   | ("Dumb Worker")   |
-   |                  |
-   +------------------+
-           |
-           v
-       claim-db (MySQL)
+---
 
-Notes:
-1. API Gateway validates JWTs, extracts userId/roles, and injects headers (X-User-Id, X-User-Roles).
-2. Business Services are "dumb" — they trust headers and focus solely on core business logic.
-3. Discovery Service (Eureka) dynamically resolves service locations — no hardcoded URLs.
+## 🏗️ Architecture
 
---------------------------------------------------------------------------------
-                        END-TO-END REQUEST FLOW
---------------------------------------------------------------------------------
+The system is built on the **"Smart Gateway, Dumb Services"** pattern:
 
-1. User Login (Obtain JWT "Passport")
-+----------------------+          +--------------------+        +------------------+
-| Frontend (React App) |  POST    | API Gateway (:8080)|  POST  | Auth Service (:8081)
-+----------------------+ /auth/login +--------------------+--------> +------------------+
-                                    |                   |        |
-                                    | Validate JWT, add headers       |
-                                    |                   |
-                                    +-------------------+
-Response: JWT with custom claims (userId, roles)
+1.  **Frontend (Experience Layer):** A Single Page Application (SPA) built with React and TypeScript. It is offline-aware and served via Nginx.
+2.  **API Gateway (Security Layer):** The single entry point for all traffic. It handles JWT authentication, routing, and CORS. It injects user identity headers (`X-User-Id`) into downstream requests.
+3.  **Microservices (Logic Layer):** Independent Spring Boot services (Auth, Claim) that focus purely on business logic.
+4.  **Infrastructure:** The entire system runs on Kubernetes (Kind), utilizing native DNS for service discovery and Nginx Ingress for routing.
 
-2. Create Claim (Secured)
-Frontend sends POST /api/v1/claims with JWT
-Flow:
+### Request Flow
+* **User** → **Ingress (Nginx)** → **API Gateway** → **Microservice** → **Database**
 
-   +----------------------+        
-   | Frontend (React App) | POST /claims
-   +----------------------+        
-              |
-              v
-   +----------------------+        
-   |   API Gateway        | 1. Run AuthenticationFilter
-   |   (:8080)            | 2. Validate JWT
-   |                      | 3. Extract userId/roles
-   |                      | 4. Add headers: X-User-Id, X-User-Roles
-   +----------------------+
-              |
-              v
-   +----------------------+        
-   | Discovery Service    | Resolve CLAIM-SERVICE location
-   | (Eureka :8761)      |
-   +----------------------+
-              |
-              v
-   +----------------------+        
-   |  Claim Service (:8082)|
-   |  Controller reads     |
-   |  X-User-Id header     |
-   |  Service validates    |
-   |  metadata             |
-   |  Repository saves     |
-   |  claim to claim-db    |
-   +----------------------+
-              |
-              v
-Response: 201 Created (New Claim JSON)
+---
 
---------------------------------------------------------------------------------
-                        ENTERPRISE-GRADE FEATURES
---------------------------------------------------------------------------------
-- 🚀 Dynamic Service Discovery: No hard-coded URLs. Uses Eureka for resilience.
-- 🛡️ Centralized Smart Gateway Security: All JWT validation happens at the gateway.
-- 🗃️ Database Version Control (Flyway): Versioned migrations for predictable DB setup.
-- 🧪 Automated Testing:
-    * Unit Tests (Mockito)
-    * Integration Tests (Testcontainers) with real MySQL & Flyway migrations.
-- 📦 Environment-Agnostic: Config via .env and docker-compose.yml (Build Once, Deploy Anywhere).
-- 🧩 Dynamic Data (JSON Metadata Pattern): Flexible JSON columns for metadata without schema changes.
-- 🔑 Secure Admin Bootstrapping: Creates "First Admin" on first boot securely via env variables.
-- 🌐 Global CORS Configuration: API Gateway handles CORS for frontend connection.
+## 📂 Repository Structure
 
---------------------------------------------------------------------------------
-                           TECHNOLOGY STACK
---------------------------------------------------------------------------------
-Java          : Java 21, Spring Boot 3.x
-Microservices : Spring Cloud Gateway (Reactive), Spring Cloud Netflix Eureka
-Security      : Spring Security 6, JWT
-Database      : Spring Data JPA, MySQL 8.0, Flyway (Migrations)
-DevOps        : Docker, Docker Compose, Multi-stage Dockerfiles
-Testing       : JUnit 5, Mockito, Testcontainers
-Utilities     : SLF4J (Logging), Jackson (JSON), jakarta.validation
+ucrmp-platform/
+├── backend/                   # Java Spring Boot Microservices
+│   ├── api-gateway/           # Spring Cloud Gateway (Port 8080)
+│   ├── auth-service/          # Authentication & Identity (Port 8081)
+│   ├── claim-service/         # Claim Management Logic (Port 8082)
+│   └── discovery-service/     # Eureka (Legacy support)
+│
+├── frontend/                  # React Application
+│   ├── src/                   # Source Code
+│   ├── Dockerfile             # Nginx Container setup
+│   └── nginx.conf             # Static serving config
+│
+├── k8s/                       # Kubernetes Infrastructure
+│   ├── 00-namespace.yaml      # Environment Setup
+│   ├── 01-infrastructure/     # Databases (MySQL) & PVCs
+│   ├── 02-ingress/            # Nginx Ingress Rules
+│   ├── 04-backend/            # Microservice Deployments
+│   └── kind-config.yaml       # Local Cluster Configuration
+│
+└── docker-compose.yml         # Local Development Setup
 
---------------------------------------------------------------------------------
-                      GETTING STARTED (FULL BACKEND)
---------------------------------------------------------------------------------
-Prerequisites:
-- Git
-- Docker Desktop
+---
 
-Clone Repository:
-git clone https://github.com/sushantchavan987/ucrmp-platform.git
-cd ucrmp-platform
+## 🛠️ Technology Stack
 
-Setup Secrets (.env file):
-1. Copy .env.example -> .env
-2. Open .env and generate secure JWT_SECRET
-   Example: openssl rand -base64 64
+| Domain | Technology |
+| :--- | :--- |
+| **Frontend** | React 18, TypeScript, Vite, TailwindCSS |
+| **Backend** | Java 21, Spring Boot 3.5.7, Spring Security |
+| **Database** | MySQL 8.0, Flyway (Migration Management) |
+| **Infrastructure** | Docker, Kubernetes (Kind), Nginx Ingress |
+| **Testing** | JUnit 5, Testcontainers |
 
-Run Entire System:
-docker-compose up --build
+---
 
-This will build all 4 microservices and start all 6 containers (4 services + 2 databases).
+## 🚀 How to Run
 
-================================================================================
-                          END OF DOCUMENT
-================================================================================
+### Prerequisites
+* Docker Desktop
+* Kubectl
+* Java 21 JDK & Node.js 18+ (For local development)
+
+### Option 1: Kubernetes (Recommended)
+This runs the full platform simulating a production environment.
+
+1.  **Initialize Cluster:**
+    kind create cluster --config kind-config.yaml
+
+2.  **Install Ingress Controller:**
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+3.  **Deploy System:**
+    # Apply Namespace & Databases
+    kubectl apply -f k8s/00-namespace.yaml
+    kubectl apply -f k8s/01-infrastructure/
+    
+    # Wait for databases to be ready, then apply Backend & Ingress
+    kubectl apply -f k8s/04-backend/
+    kubectl apply -f k8s/02-ingress/
+
+4.  **Access:**
+    * **App:** http://localhost:8081
+
+### Option 2: Docker Compose
+Quick start for checking connectivity without Kubernetes.
+
+1.  **Run:**
+    docker-compose up --build
+
+2.  **Access:**
+    * **App:** http://localhost:80
+
+---
+
+## 🔐 Configuration
+* **Environment Variables:** All secrets (DB passwords, JWT keys) are managed via `.env` files or Kubernetes Secrets.
+* **Database:** `ddl-auto` is disabled. Schema changes are managed via Flyway scripts in `src/main/resources/db/migration`.
