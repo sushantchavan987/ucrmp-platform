@@ -13,8 +13,9 @@ export interface User {
   exp?: number;     // Expiration timestamp
 }
 
-// ... rest of the file (LoginRequest, RegisterRequest, etc.) stays the same ...
+// ... rest of the file (LoginRequest, RegisterRequest, etc.) stays the same
 // (Ensure RegisterRequest still has firstName/lastName as we added earlier)
+// trigger
 export interface LoginRequest {
   email: string;
   password: string;

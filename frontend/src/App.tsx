@@ -14,6 +14,7 @@ const CreateClaimPage = lazy(() => import('./pages/CreateClaimPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
+// Trigger the CI
 const PageLoader = () => (
   <div className="p-8 space-y-4 max-w-4xl mx-auto">
     <Skeleton className="h-12 w-1/3 mb-8" />
