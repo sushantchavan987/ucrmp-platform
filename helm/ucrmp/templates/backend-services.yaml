@@ -1,0 +1,184 @@
+# --- DISCOVERY SERVICE ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-service
+  namespace: {{ .Values.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: discovery-service
+  ports:
+    - port: 8761
+      targetPort: 8761
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discovery-service
+  template:
+    metadata:
+      labels:
+        app: discovery-service
+    spec:
+      containers:
+        - name: discovery-service
+          image: {{ .Values.images.discovery }}
+          ports:
+            - containerPort: 8761
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8761
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+# --- AUTH SERVICE ---
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: {{ .Values.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: auth-service
+  ports:
+    - port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: {{ .Values.images.auth }}
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
+              value: "true"
+            - name: AUTH_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: AUTH_DB_HOST
+            - name: AUTH_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: AUTH_DB_NAME
+            - name: DISCOVERY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: DISCOVERY_HOST
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: mysql-root-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: jwt-secret
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+# --- CLAIM SERVICE ---
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claim-service
+  namespace: {{ .Values.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: claim-service
+  ports:
+    - port: 8082
+      targetPort: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claim-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claim-service
+  template:
+    metadata:
+      labels:
+        app: claim-service
+    spec:
+      containers:
+        - name: claim-service
+          image: {{ .Values.images.claim }}
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
+              value: "true"
+            - name: CLAIM_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: CLAIM_DB_HOST
+            - name: CLAIM_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: CLAIM_DB_NAME
+            - name: DISCOVERY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: DISCOVERY_HOST
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: mysql-root-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: jwt-secret
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 10

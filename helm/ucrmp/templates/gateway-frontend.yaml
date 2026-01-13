@@ -1,0 +1,86 @@
+# --- API GATEWAY ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: {{ .Values.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8090
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: {{ .Values.images.gateway }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: DISCOVERY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: DISCOVERY_HOST
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: jwt-secret
+
+# --- FRONTEND ---
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ucrmp-frontend
+  namespace: {{ .Values.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: ucrmp-frontend
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ucrmp-frontend
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ucrmp-frontend
+  template:
+    metadata:
+      labels:
+        app: ucrmp-frontend
+    spec:
+      containers:
+        - name: ucrmp-frontend
+          image: {{ .Values.images.frontend }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: VITE_API_BASE_URL
+              value: "/api/v1"

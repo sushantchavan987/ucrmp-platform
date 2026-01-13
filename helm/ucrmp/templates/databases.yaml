@@ -1,0 +1,114 @@
+# --- AUTH DB ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-db
+  namespace: {{ .Values.namespace }}
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: auth-db
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: auth-db
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceName: "auth-db"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-db
+  template:
+    metadata:
+      labels:
+        app: auth-db
+    spec:
+      containers:
+        - name: mysql
+          image: {{ .Values.images.mysql }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: mysql-root-password
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: AUTH_DB_NAME
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+
+# --- CLAIM DB ---
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claim-db
+  namespace: {{ .Values.namespace }}
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: claim-db
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: claim-db
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceName: "claim-db"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claim-db
+  template:
+    metadata:
+      labels:
+        app: claim-db
+    spec:
+      containers:
+        - name: mysql
+          image: {{ .Values.images.mysql }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ucrmp-secrets
+                  key: mysql-root-password
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: ucrmp-config
+                  key: CLAIM_DB_NAME
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi

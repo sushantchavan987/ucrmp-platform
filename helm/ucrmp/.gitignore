@@ -1,0 +1,13 @@
+# --- Helm Specific ---
+# Ignore the actual values file because it contains SECRETS (Passwords/JWT)
+values.yaml
+
+# Ignore zipped charts (if you ever run helm package)
+*.tgz
+*.lock
+charts/
+
+# --- IDE Specific ---
+.idea/
+.vscode/
+.DS_Store
