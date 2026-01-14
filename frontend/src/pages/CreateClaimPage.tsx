@@ -15,6 +15,7 @@ import { useTitle } from '../hooks/useTitle';
 import { logger } from '../lib/utils';
 import { CLAIM_TYPES, CLAIM_TYPE_OPTIONS } from '../utils/constants';
 
+// start
 const CreateClaimPage = () => {
   useTitle('New Claim');
   const navigate = useNavigate();
