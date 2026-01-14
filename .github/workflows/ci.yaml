@@ -1,9 +1,10 @@
 name: UCRMP CI Pipeline
 
-# 1. TRIGGERS
-# This pipeline runs ONLY when you push to 'main'
-# AND you change files in specific folders.
 on:
+  # 1. ALLOW MANUAL TRIGGER (The Fix)
+  workflow_dispatch:
+
+  # 2. TRIGGER ON PUSH
   push:
     branches: [ "main" ]
     paths:
@@ -13,8 +14,7 @@ on:
       - 'api-gateway/**'
       - 'discovery-service/**'
 
-# 2. PERMISSIONS
-# Needed so this script can commit changes back to your repo (Update Helm)
+# 3. PERMISSIONS (Required to push back to repo)
 permissions:
   contents: write
 
@@ -50,11 +50,16 @@ jobs:
         with:
           fetch-depth: 2 
 
-      # 3. SMART CHANGE DETECTION
+      # SMART CHANGE DETECTION
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
+          # If triggered manually, force build ALL services
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Manual trigger detected. Building ${{ matrix.service }}..."
+          # Otherwise check git diff
+          elif git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "No changes in ${{ matrix.service }}. Skipping build."
           else
@@ -74,7 +79,6 @@ jobs:
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      # 4. BUILD & PUSH
       - name: Build and Push Docker Image
         if: steps.changes.outputs.changed == 'true'
         uses: docker/build-push-action@v4
@@ -106,11 +110,14 @@ jobs:
           cd helm/ucrmp
           SHORT_SHA=${{ steps.vars.outputs.sha_short }}
           
-          # Loop through services and update if they changed
+          # If manual trigger, update ALL tags. Otherwise check diff.
+          FORCE_UPDATE="false"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+             FORCE_UPDATE="true"
+          fi
+
           for service in auth-service claim-service ucrmp-frontend api-gateway discovery-service; do
-             if git diff --quiet HEAD^ HEAD -- ../../$service; then
-               echo "No change in $service"
-             else
+             if [ "$FORCE_UPDATE" == "true" ] || ! git diff --quiet HEAD^ HEAD -- ../../$service; then
                echo "Updating $service tag to $SHORT_SHA"
                if [ "$service" == "auth-service" ]; then 
                   sed -i "s|auth: .*|auth: \"sushantc041/ucrmp-auth:$SHORT_SHA\"|g" values.yaml
