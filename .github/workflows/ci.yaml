@@ -1,26 +1,19 @@
 name: UCRMP CI Pipeline
 
 on:
-  # 1. ALLOW MANUAL TRIGGER (The Fix)
-  workflow_dispatch:
-
-  # 2. TRIGGER ON PUSH
+  workflow_dispatch: # Manual Trigger
   push:
     branches: [ "main" ]
     paths:
-      - 'auth-service/**'
-      - 'claim-service/**'
-      - 'ucrmp-frontend/**'
-      - 'api-gateway/**'
-      - 'discovery-service/**'
+      - 'backend/**'
+      - 'frontend/**'
 
-# 3. PERMISSIONS (Required to push back to repo)
 permissions:
   contents: write
 
 jobs:
   # ====================================================
-  # JOB 1: BUILD & PUSH (Matrix Strategy)
+  # JOB 1: BUILD & PUSH
   # ====================================================
   build-and-push:
     runs-on: ubuntu-latest
@@ -28,21 +21,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # --- BACKEND SERVICES (Nested in backend/ folder) ---
           - service: auth
-            context: ./auth-service
+            context: ./backend/auth-service
             image: sushantc041/ucrmp-auth
           - service: claim
-            context: ./claim-service
+            context: ./backend/claim-service
             image: sushantc041/ucrmp-claim
-          - service: frontend
-            context: ./ucrmp-frontend
-            image: sushantc041/ucrmp-frontend
           - service: gateway
-            context: ./api-gateway
+            context: ./backend/api-gateway
             image: sushantc041/ucrmp-gateway
           - service: discovery
-            context: ./discovery-service
+            context: ./backend/discovery-service
             image: sushantc041/ucrmp-discovery-service
+          
+          # --- FRONTEND (Nested in frontend/ folder) ---
+          - service: frontend
+            context: ./frontend
+            image: sushantc041/ucrmp-frontend
 
     steps:
       - name: Checkout Code
@@ -50,21 +46,20 @@ jobs:
         with:
           fetch-depth: 2 
 
-      # SMART CHANGE DETECTION
       - name: Check for changes
         id: changes
         run: |
-          # If triggered manually, force build ALL services
+          # Manual trigger -> Build everything
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Manual trigger detected. Building ${{ matrix.service }}..."
-          # Otherwise check git diff
+            echo "Manual trigger. Building ${{ matrix.service }}..."
+          # Git push -> Check specific folder diff
           elif git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No changes in ${{ matrix.service }}. Skipping build."
+            echo "No changes in ${{ matrix.service }}. Skipping."
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in ${{ matrix.service }}. Proceeding..."
+            echo "Changes detected in ${{ matrix.service }}."
           fi
 
       - name: Login to Docker Hub
@@ -90,7 +85,7 @@ jobs:
             ${{ matrix.image }}:${{ steps.vars.outputs.sha_short }}
 
   # ====================================================
-  # JOB 2: UPDATE HELM (Run only after builds finish)
+  # JOB 2: UPDATE HELM
   # ====================================================
   update-helm:
     needs: build-and-push
@@ -110,28 +105,32 @@ jobs:
           cd helm/ucrmp
           SHORT_SHA=${{ steps.vars.outputs.sha_short }}
           
-          # If manual trigger, update ALL tags. Otherwise check diff.
           FORCE_UPDATE="false"
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
              FORCE_UPDATE="true"
           fi
 
-          for service in auth-service claim-service ucrmp-frontend api-gateway discovery-service; do
-             if [ "$FORCE_UPDATE" == "true" ] || ! git diff --quiet HEAD^ HEAD -- ../../$service; then
-               echo "Updating $service tag to $SHORT_SHA"
-               if [ "$service" == "auth-service" ]; then 
-                  sed -i "s|auth: .*|auth: \"sushantc041/ucrmp-auth:$SHORT_SHA\"|g" values.yaml
-               elif [ "$service" == "claim-service" ]; then
-                  sed -i "s|claim: .*|claim: \"sushantc041/ucrmp-claim:$SHORT_SHA\"|g" values.yaml
-               elif [ "$service" == "ucrmp-frontend" ]; then
-                  sed -i "s|frontend: .*|frontend: \"sushantc041/ucrmp-frontend:$SHORT_SHA\"|g" values.yaml
-               elif [ "$service" == "api-gateway" ]; then
-                  sed -i "s|gateway: .*|gateway: \"sushantc041/ucrmp-gateway:$SHORT_SHA\"|g" values.yaml
-               elif [ "$service" == "discovery-service" ]; then
-                  sed -i "s|discovery: .*|discovery: \"sushantc041/ucrmp-discovery-service:$SHORT_SHA\"|g" values.yaml
-               fi
+          # Function to check changes in specific path
+          check_and_update() {
+             SERVICE_NAME=$1
+             FOLDER_PATH=$2
+             HELM_KEY=$3
+             
+             if [ "$FORCE_UPDATE" == "true" ] || ! git diff --quiet HEAD^ HEAD -- ../../$FOLDER_PATH; then
+               echo "Updating $SERVICE_NAME tag to $SHORT_SHA"
+               # Uses sed to find key: "image:tag" and replace it
+               sed -i "s|$HELM_KEY: .*|$HELM_KEY: \"sushantc041/ucrmp-$SERVICE_NAME:$SHORT_SHA\"|g" values.yaml
              fi
-          done
+          }
+
+          # Check each service with its CORRECT folder path
+          check_and_update "auth"       "backend/auth-service"      "auth"
+          check_and_update "claim"      "backend/claim-service"     "claim"
+          check_and_update "gateway"    "backend/api-gateway"       "gateway"
+          check_and_update "discovery-service" "backend/discovery-service" "discovery"
+          check_and_update "frontend"   "frontend"                  "frontend"
+
+          echo "--- Updated values.yaml ---"
           cat values.yaml 
 
       - name: Commit and Push
