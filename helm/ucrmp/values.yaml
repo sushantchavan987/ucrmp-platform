@@ -1,0 +1,11 @@
+# helm/ucrmp/values.yaml
+
+namespace: ucrmp-dev
+
+images:
+  auth: "sushantc041/ucrmp-auth:v1.0.6"
+  claim: "sushantc041/ucrmp-claim:v1.0.3"
+  discovery: "sushantc041/ucrmp-discovery-service:v1.0.0"
+  gateway: "sushantc041/ucrmp-gateway:v1.0.5"
+  frontend: "sushantc041/ucrmp-frontend:v1.0.2"
+  mysql: "mysql:8.0"
