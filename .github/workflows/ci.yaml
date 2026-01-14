@@ -12,16 +12,13 @@ permissions:
   contents: write
 
 jobs:
-  # ====================================================
-  # JOB 1: BUILD & PUSH
-  # ====================================================
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # --- BACKEND SERVICES (Nested in backend/ folder) ---
+          # ✅ CORRECT PATHS (Nested in backend/)
           - service: auth
             context: ./backend/auth-service
             image: sushantc041/ucrmp-auth
@@ -35,7 +32,7 @@ jobs:
             context: ./backend/discovery-service
             image: sushantc041/ucrmp-discovery-service
           
-          # --- FRONTEND (Nested in frontend/ folder) ---
+          # ✅ CORRECT PATH (Root folder is 'frontend', not 'ucrmp-frontend')
           - service: frontend
             context: ./frontend
             image: sushantc041/ucrmp-frontend
@@ -49,14 +46,12 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          # Manual trigger -> Build everything
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "Manual trigger. Building ${{ matrix.service }}..."
-          # Git push -> Check specific folder diff
           elif git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No changes in ${{ matrix.service }}. Skipping."
+            echo "No changes in ${{ matrix.service }}."
           else
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "Changes detected in ${{ matrix.service }}."
@@ -84,9 +79,6 @@ jobs:
             ${{ matrix.image }}:latest
             ${{ matrix.image }}:${{ steps.vars.outputs.sha_short }}
 
-  # ====================================================
-  # JOB 2: UPDATE HELM
-  # ====================================================
   update-helm:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -110,27 +102,25 @@ jobs:
              FORCE_UPDATE="true"
           fi
 
-          # Function to check changes in specific path
           check_and_update() {
              SERVICE_NAME=$1
              FOLDER_PATH=$2
              HELM_KEY=$3
              
+             # Note the path correction: ../../backend/...
              if [ "$FORCE_UPDATE" == "true" ] || ! git diff --quiet HEAD^ HEAD -- ../../$FOLDER_PATH; then
                echo "Updating $SERVICE_NAME tag to $SHORT_SHA"
-               # Uses sed to find key: "image:tag" and replace it
                sed -i "s|$HELM_KEY: .*|$HELM_KEY: \"sushantc041/ucrmp-$SERVICE_NAME:$SHORT_SHA\"|g" values.yaml
              fi
           }
 
-          # Check each service with its CORRECT folder path
+          # ✅ CORRECT PATHS passed to the update logic
           check_and_update "auth"       "backend/auth-service"      "auth"
           check_and_update "claim"      "backend/claim-service"     "claim"
           check_and_update "gateway"    "backend/api-gateway"       "gateway"
           check_and_update "discovery-service" "backend/discovery-service" "discovery"
           check_and_update "frontend"   "frontend"                  "frontend"
 
-          echo "--- Updated values.yaml ---"
           cat values.yaml 
 
       - name: Commit and Push
