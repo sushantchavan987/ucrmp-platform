@@ -12,6 +12,9 @@ permissions:
   contents: write
 
 jobs:
+  # ====================================================
+  # JOB 1: BUILD & PUSH
+  # ====================================================
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
@@ -40,31 +43,30 @@ jobs:
         with:
           fetch-depth: 2 
 
+      # Use the Plugin to detect changes (No more manual git diff errors)
       - name: Check for changes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          elif git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            changed:
+              - '${{ matrix.context }}/**'
 
       - name: Login to Docker Hub
-        if: steps.changes.outputs.changed == 'true'
+        # Run if changed OR if triggered manually
+        if: steps.filter.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Generate Short SHA
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.filter.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.filter.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v4
         with:
           context: ${{ matrix.context }}
@@ -73,69 +75,70 @@ jobs:
             ${{ matrix.image }}:latest
             ${{ matrix.image }}:${{ steps.vars.outputs.sha_short }}
 
+  # ====================================================
+  # JOB 2: UPDATE HELM
+  # ====================================================
   update-helm:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+
+      # Detect changes for ALL services at once using the Plugin
+      - name: Filter Paths
+        uses: dorny/paths-filter@v2
+        id: filter
         with:
-          fetch-depth: 0 # Fetch all history to ensure diff works
+          filters: |
+            auth:
+              - 'backend/auth-service/**'
+            claim:
+              - 'backend/claim-service/**'
+            gateway:
+              - 'backend/api-gateway/**'
+            discovery:
+              - 'backend/discovery-service/**'
+            frontend:
+              - 'frontend/**'
 
       - name: Update values.yaml
         run: |
-          # 1. Get the SHA
+          cd helm/ucrmp
           SHORT_SHA=$(git rev-parse --short HEAD)
           echo "Using SHA: $SHORT_SHA"
 
-          # 2. Determine which services changed (Run from ROOT)
-          # Default to FALSE
-          UPDATE_AUTH="false"
-          UPDATE_CLAIM="false"
-          UPDATE_GATEWAY="false"
-          UPDATE_DISCOVERY="false"
-          UPDATE_FRONTEND="false"
+          # Helper function to update helm
+          update_tag() {
+            KEY=$1
+            IMAGE_NAME=$2
+            sed -i "s|$KEY: .*|$KEY: \"$IMAGE_NAME:$SHORT_SHA\"|g" values.yaml
+            echo "Updated $KEY to $SHORT_SHA"
+          }
 
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-             echo "Manual trigger: Updating ALL."
-             UPDATE_AUTH="true"
-             UPDATE_CLAIM="true"
-             UPDATE_GATEWAY="true"
-             UPDATE_DISCOVERY="true"
-             UPDATE_FRONTEND="true"
-          else
-             # Check each folder explicitly from root
-             if ! git diff --quiet HEAD^ HEAD -- backend/auth-service; then UPDATE_AUTH="true"; fi
-             if ! git diff --quiet HEAD^ HEAD -- backend/claim-service; then UPDATE_CLAIM="true"; fi
-             if ! git diff --quiet HEAD^ HEAD -- backend/api-gateway; then UPDATE_GATEWAY="true"; fi
-             if ! git diff --quiet HEAD^ HEAD -- backend/discovery-service; then UPDATE_DISCOVERY="true"; fi
-             if ! git diff --quiet HEAD^ HEAD -- frontend; then UPDATE_FRONTEND="true"; fi
-          fi
-
-          # 3. Move to Helm folder and Apply Updates
-          cd helm/ucrmp
-
-          if [ "$UPDATE_AUTH" == "true" ]; then
-             sed -i "s|auth: .*|auth: \"sushantc041/ucrmp-auth:$SHORT_SHA\"|g" values.yaml
+          # LOGIC: If Manual Trigger OR Path Changed -> Update
+          IS_MANUAL="${{ github.event_name == 'workflow_dispatch' }}"
+          
+          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.auth }}" == "true" ]; then
+             update_tag "auth" "sushantc041/ucrmp-auth"
           fi
           
-          if [ "$UPDATE_CLAIM" == "true" ]; then
-             sed -i "s|claim: .*|claim: \"sushantc041/ucrmp-claim:$SHORT_SHA\"|g" values.yaml
+          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.claim }}" == "true" ]; then
+             update_tag "claim" "sushantc041/ucrmp-claim"
           fi
 
-          if [ "$UPDATE_GATEWAY" == "true" ]; then
-             sed -i "s|gateway: .*|gateway: \"sushantc041/ucrmp-gateway:$SHORT_SHA\"|g" values.yaml
+          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.gateway }}" == "true" ]; then
+             update_tag "gateway" "sushantc041/ucrmp-gateway"
           fi
 
-          if [ "$UPDATE_DISCOVERY" == "true" ]; then
-             sed -i "s|discovery: .*|discovery: \"sushantc041/ucrmp-discovery-service:$SHORT_SHA\"|g" values.yaml
+          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.discovery }}" == "true" ]; then
+             update_tag "discovery" "sushantc041/ucrmp-discovery-service"
           fi
 
-          if [ "$UPDATE_FRONTEND" == "true" ]; then
-             sed -i "s|frontend: .*|frontend: \"sushantc041/ucrmp-frontend:$SHORT_SHA\"|g" values.yaml
+          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.frontend }}" == "true" ]; then
+             update_tag "frontend" "sushantc041/ucrmp-frontend"
           fi
 
-          # Debug: Show file content
           cat values.yaml
 
       - name: Commit and Push
