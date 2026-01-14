@@ -1,8 +1,7 @@
-# Forced update to fix paths
 name: UCRMP CI Pipeline
 
 on:
-  workflow_dispatch: # Allows manual button click
+  workflow_dispatch: # Manual Trigger
   push:
     branches: [ "main" ]
     paths:
@@ -19,7 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # --- BACKEND SERVICES (Inside 'backend' folder) ---
           - service: auth
             context: ./backend/auth-service
             image: sushantc041/ucrmp-auth
@@ -32,8 +30,6 @@ jobs:
           - service: discovery
             context: ./backend/discovery-service
             image: sushantc041/ucrmp-discovery-service
-          
-          # --- FRONTEND (Inside 'frontend' folder) ---
           - service: frontend
             context: ./frontend
             image: sushantc041/ucrmp-frontend
@@ -47,17 +43,12 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          # If Manual Trigger -> Force Build
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Manual trigger. Building ${{ matrix.service }}..."
-          # If Push -> Check Folder Diff
           elif git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No changes in ${{ matrix.service }}."
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in ${{ matrix.service }}."
           fi
 
       - name: Login to Docker Hub
@@ -89,42 +80,63 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
-
-      - name: Generate Short SHA
-        id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fetch-depth: 0 # Fetch all history to ensure diff works
 
       - name: Update values.yaml
         run: |
-          cd helm/ucrmp
-          SHORT_SHA=${{ steps.vars.outputs.sha_short }}
-          
-          FORCE_UPDATE="false"
+          # 1. Get the SHA
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "Using SHA: $SHORT_SHA"
+
+          # 2. Determine which services changed (Run from ROOT)
+          # Default to FALSE
+          UPDATE_AUTH="false"
+          UPDATE_CLAIM="false"
+          UPDATE_GATEWAY="false"
+          UPDATE_DISCOVERY="false"
+          UPDATE_FRONTEND="false"
+
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-             FORCE_UPDATE="true"
+             echo "Manual trigger: Updating ALL."
+             UPDATE_AUTH="true"
+             UPDATE_CLAIM="true"
+             UPDATE_GATEWAY="true"
+             UPDATE_DISCOVERY="true"
+             UPDATE_FRONTEND="true"
+          else
+             # Check each folder explicitly from root
+             if ! git diff --quiet HEAD^ HEAD -- backend/auth-service; then UPDATE_AUTH="true"; fi
+             if ! git diff --quiet HEAD^ HEAD -- backend/claim-service; then UPDATE_CLAIM="true"; fi
+             if ! git diff --quiet HEAD^ HEAD -- backend/api-gateway; then UPDATE_GATEWAY="true"; fi
+             if ! git diff --quiet HEAD^ HEAD -- backend/discovery-service; then UPDATE_DISCOVERY="true"; fi
+             if ! git diff --quiet HEAD^ HEAD -- frontend; then UPDATE_FRONTEND="true"; fi
           fi
 
-          check_and_update() {
-             SERVICE_NAME=$1
-             FOLDER_PATH=$2
-             HELM_KEY=$3
-             
-             # Logic: Check specific folder paths
-             if [ "$FORCE_UPDATE" == "true" ] || ! git diff --quiet HEAD^ HEAD -- ../../$FOLDER_PATH; then
-               echo "Updating $SERVICE_NAME tag to $SHORT_SHA"
-               sed -i "s|$HELM_KEY: .*|$HELM_KEY: \"sushantc041/ucrmp-$SERVICE_NAME:$SHORT_SHA\"|g" values.yaml
-             fi
-          }
+          # 3. Move to Helm folder and Apply Updates
+          cd helm/ucrmp
 
-          # Running check against the REAL paths
-          check_and_update "auth"       "backend/auth-service"      "auth"
-          check_and_update "claim"      "backend/claim-service"     "claim"
-          check_and_update "gateway"    "backend/api-gateway"       "gateway"
-          check_and_update "discovery-service" "backend/discovery-service" "discovery"
-          check_and_update "frontend"   "frontend"                  "frontend"
+          if [ "$UPDATE_AUTH" == "true" ]; then
+             sed -i "s|auth: .*|auth: \"sushantc041/ucrmp-auth:$SHORT_SHA\"|g" values.yaml
+          fi
+          
+          if [ "$UPDATE_CLAIM" == "true" ]; then
+             sed -i "s|claim: .*|claim: \"sushantc041/ucrmp-claim:$SHORT_SHA\"|g" values.yaml
+          fi
 
-          cat values.yaml 
+          if [ "$UPDATE_GATEWAY" == "true" ]; then
+             sed -i "s|gateway: .*|gateway: \"sushantc041/ucrmp-gateway:$SHORT_SHA\"|g" values.yaml
+          fi
+
+          if [ "$UPDATE_DISCOVERY" == "true" ]; then
+             sed -i "s|discovery: .*|discovery: \"sushantc041/ucrmp-discovery-service:$SHORT_SHA\"|g" values.yaml
+          fi
+
+          if [ "$UPDATE_FRONTEND" == "true" ]; then
+             sed -i "s|frontend: .*|frontend: \"sushantc041/ucrmp-frontend:$SHORT_SHA\"|g" values.yaml
+          fi
+
+          # Debug: Show file content
+          cat values.yaml
 
       - name: Commit and Push
         run: |
@@ -135,6 +147,6 @@ jobs:
             echo "No changes to values.yaml"
           else
             git add helm/ucrmp/values.yaml
-            git commit -m "chore: update image tags for ${{ steps.vars.outputs.sha_short }} [skip ci]"
+            git commit -m "chore: update image tags [skip ci]"
             git push
           fi
