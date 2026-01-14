@@ -32,6 +32,7 @@ Thumbs.db
 # --- Logs ---
 logs/
 *.log
+*.exe
 
 # --- Kubernetes Secrets (Safety First) ---
 # (If we had real secrets, we'd ignore them, but for now we keep k8s/ files)
