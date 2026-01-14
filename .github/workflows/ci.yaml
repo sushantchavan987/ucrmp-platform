@@ -7,15 +7,43 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'helm/**'
 
 permissions:
   contents: write
 
 jobs:
   # ====================================================
-  # JOB 1: BUILD & PUSH
+  # JOB 1: DETECT CHANGES (The Brain)
+  # ====================================================
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      claim: ${{ steps.filter.outputs.claim }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      discovery: ${{ steps.filter.outputs.discovery }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      # If manual trigger, we force everything to 'true'
+      is_manual: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            auth: 'backend/auth-service/**'
+            claim: 'backend/claim-service/**'
+            gateway: 'backend/api-gateway/**'
+            discovery: 'backend/discovery-service/**'
+            frontend: 'frontend/**'
+
+  # ====================================================
+  # JOB 2: BUILD & PUSH (The Muscle)
   # ====================================================
   build-and-push:
+    needs: detect-changes
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -24,49 +52,47 @@ jobs:
           - service: auth
             context: ./backend/auth-service
             image: sushantc041/ucrmp-auth
+            key: auth
           - service: claim
             context: ./backend/claim-service
             image: sushantc041/ucrmp-claim
+            key: claim
           - service: gateway
             context: ./backend/api-gateway
             image: sushantc041/ucrmp-gateway
+            key: gateway
           - service: discovery
             context: ./backend/discovery-service
             image: sushantc041/ucrmp-discovery-service
+            key: discovery
           - service: frontend
             context: ./frontend
             image: sushantc041/ucrmp-frontend
+            key: frontend
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2 
-
-      # Use the Plugin to detect changes (No more manual git diff errors)
-      - name: Check for changes
-        uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: |
-            changed:
-              - '${{ matrix.context }}/**'
+          fetch-depth: 1 # We don't need history for building
 
       - name: Login to Docker Hub
-        # Run if changed OR if triggered manually
-        if: steps.filter.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        # Run if Manual OR if this specific service changed
+        if: needs.detect-changes.outputs.is_manual == 'true' || needs.detect-changes.outputs[matrix.key] == 'true'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Generate Short SHA
-        if: steps.filter.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        # Run if Manual OR if this specific service changed
+        if: needs.detect-changes.outputs.is_manual == 'true' || needs.detect-changes.outputs[matrix.key] == 'true'
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
-        if: steps.filter.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        # Run if Manual OR if this specific service changed
+        if: needs.detect-changes.outputs.is_manual == 'true' || needs.detect-changes.outputs[matrix.key] == 'true'
         uses: docker/build-push-action@v4
         with:
           context: ${{ matrix.context }}
@@ -76,69 +102,61 @@ jobs:
             ${{ matrix.image }}:${{ steps.vars.outputs.sha_short }}
 
   # ====================================================
-  # JOB 2: UPDATE HELM
+  # JOB 3: UPDATE HELM (The Config)
   # ====================================================
   update-helm:
-    needs: build-and-push
+    needs: [detect-changes, build-and-push]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Detect changes for ALL services at once using the Plugin
-      - name: Filter Paths
-        uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: |
-            auth:
-              - 'backend/auth-service/**'
-            claim:
-              - 'backend/claim-service/**'
-            gateway:
-              - 'backend/api-gateway/**'
-            discovery:
-              - 'backend/discovery-service/**'
-            frontend:
-              - 'frontend/**'
-
       - name: Update values.yaml
         run: |
-          cd helm/ucrmp
+          # 1. Setup Variables
           SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "Using SHA: $SHORT_SHA"
+          cd helm/ucrmp
+          
+          # 2. Define "Should We Update?" variables based on Job 1 outputs
+          # (We read the outputs passed from the 'detect-changes' job)
+          MANUAL="${{ needs.detect-changes.outputs.is_manual }}"
+          AUTH_CHANGED="${{ needs.detect-changes.outputs.auth }}"
+          CLAIM_CHANGED="${{ needs.detect-changes.outputs.claim }}"
+          GATEWAY_CHANGED="${{ needs.detect-changes.outputs.gateway }}"
+          DISCOVERY_CHANGED="${{ needs.detect-changes.outputs.discovery }}"
+          FRONTEND_CHANGED="${{ needs.detect-changes.outputs.frontend }}"
 
-          # Helper function to update helm
+          # 3. Execution Function
           update_tag() {
             KEY=$1
-            IMAGE_NAME=$2
-            sed -i "s|$KEY: .*|$KEY: \"$IMAGE_NAME:$SHORT_SHA\"|g" values.yaml
+            IMAGE=$2
+            # Use sed safely
+            sed -i "s|$KEY: .*|$KEY: \"$IMAGE:$SHORT_SHA\"|g" values.yaml
             echo "Updated $KEY to $SHORT_SHA"
           }
 
-          # LOGIC: If Manual Trigger OR Path Changed -> Update
-          IS_MANUAL="${{ github.event_name == 'workflow_dispatch' }}"
-          
-          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.auth }}" == "true" ]; then
+          # 4. Logic Loop
+          if [ "$MANUAL" == "true" ] || [ "$AUTH_CHANGED" == "true" ]; then
              update_tag "auth" "sushantc041/ucrmp-auth"
           fi
           
-          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.claim }}" == "true" ]; then
+          if [ "$MANUAL" == "true" ] || [ "$CLAIM_CHANGED" == "true" ]; then
              update_tag "claim" "sushantc041/ucrmp-claim"
           fi
-
-          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.gateway }}" == "true" ]; then
+          
+          if [ "$MANUAL" == "true" ] || [ "$GATEWAY_CHANGED" == "true" ]; then
              update_tag "gateway" "sushantc041/ucrmp-gateway"
           fi
-
-          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.discovery }}" == "true" ]; then
+          
+          if [ "$MANUAL" == "true" ] || [ "$DISCOVERY_CHANGED" == "true" ]; then
              update_tag "discovery" "sushantc041/ucrmp-discovery-service"
           fi
-
-          if [ "$IS_MANUAL" == "true" ] || [ "${{ steps.filter.outputs.frontend }}" == "true" ]; then
+          
+          if [ "$MANUAL" == "true" ] || [ "$FRONTEND_CHANGED" == "true" ]; then
              update_tag "frontend" "sushantc041/ucrmp-frontend"
           fi
 
+          echo "Final values.yaml content:"
           cat values.yaml
 
       - name: Commit and Push
@@ -146,8 +164,9 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
+          # Only commit if git diff finds changes
           if git diff --quiet helm/ucrmp/values.yaml; then
-            echo "No changes to values.yaml"
+            echo "No changes to values.yaml. Skipping commit."
           else
             git add helm/ucrmp/values.yaml
             git commit -m "chore: update image tags [skip ci]"
