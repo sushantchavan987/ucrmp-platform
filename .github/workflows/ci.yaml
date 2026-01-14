@@ -1,7 +1,7 @@
 name: UCRMP CI Pipeline
 
 on:
-  workflow_dispatch: # Manual Trigger
+  workflow_dispatch: # Allows manual button click
   push:
     branches: [ "main" ]
     paths:
@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ✅ CORRECT PATHS (Nested in backend/)
+          # --- BACKEND SERVICES (Inside 'backend' folder) ---
           - service: auth
             context: ./backend/auth-service
             image: sushantc041/ucrmp-auth
@@ -32,7 +32,7 @@ jobs:
             context: ./backend/discovery-service
             image: sushantc041/ucrmp-discovery-service
           
-          # ✅ CORRECT PATH (Root folder is 'frontend', not 'ucrmp-frontend')
+          # --- FRONTEND (Inside 'frontend' folder) ---
           - service: frontend
             context: ./frontend
             image: sushantc041/ucrmp-frontend
@@ -46,9 +46,11 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
+          # If Manual Trigger -> Force Build
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "Manual trigger. Building ${{ matrix.service }}..."
+          # If Push -> Check Folder Diff
           elif git diff --quiet HEAD^ HEAD -- ${{ matrix.context }}; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "No changes in ${{ matrix.service }}."
@@ -107,14 +109,14 @@ jobs:
              FOLDER_PATH=$2
              HELM_KEY=$3
              
-             # Note the path correction: ../../backend/...
+             # Logic: Check specific folder paths
              if [ "$FORCE_UPDATE" == "true" ] || ! git diff --quiet HEAD^ HEAD -- ../../$FOLDER_PATH; then
                echo "Updating $SERVICE_NAME tag to $SHORT_SHA"
                sed -i "s|$HELM_KEY: .*|$HELM_KEY: \"sushantc041/ucrmp-$SERVICE_NAME:$SHORT_SHA\"|g" values.yaml
              fi
           }
 
-          # ✅ CORRECT PATHS passed to the update logic
+          # Running check against the REAL paths
           check_and_update "auth"       "backend/auth-service"      "auth"
           check_and_update "claim"      "backend/claim-service"     "claim"
           check_and_update "gateway"    "backend/api-gateway"       "gateway"
