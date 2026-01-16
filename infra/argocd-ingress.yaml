@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    # Important: ArgoCD talks over HTTPS internally, so we tell Nginx to speak HTTPS to it
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    # Allow large bodies (for uploading big charts if needed)
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: argocd.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 443
