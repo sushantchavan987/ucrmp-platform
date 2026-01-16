@@ -4,7 +4,7 @@ namespace: ucrmp-dev
 
 images:
   auth: "sushantc041/ucrmp-auth:aeca6e7"
-  claim: "sushantc041/ucrmp-claim:aeca6e7"
+  claim: "sushantc041/ucrmp-claim:6abf983"
   discovery: "sushantc041/ucrmp-discovery-service:aeca6e7"
   gateway: "sushantc041/ucrmp-gateway:aeca6e7"
   frontend: "sushantc041/ucrmp-frontend:aeca6e7"
