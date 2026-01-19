@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ucrmp-config
+  namespace: {{ .Values.namespace }}
+data:
+  AUTH_DB_HOST: "auth-db"
+  AUTH_DB_NAME: "auth_db"
+  CLAIM_DB_HOST: "claim-db"
+  CLAIM_DB_NAME: "claim_db"
+  DISCOVERY_HOST: "discovery-service"
+  SPRING_PROFILES_ACTIVE: "dev"
+  SPRING_APPLICATION_JSON: '{"eureka": {"instance": {"prefer-ip-address": true}}}'

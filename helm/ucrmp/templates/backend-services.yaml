@@ -97,12 +97,12 @@ spec:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ucrmp-secrets
+                  name: ucrmp-platform-secrets
                   key: mysql-root-password
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: ucrmp-secrets
+                  name: ucrmp-platform-secrets
                   key: jwt-secret
           readinessProbe:
             httpGet:
@@ -169,12 +169,12 @@ spec:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ucrmp-secrets
+                  name: ucrmp-platform-secrets
                   key: mysql-root-password
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: ucrmp-secrets
+                  name: ucrmp-platform-secrets
                   key: jwt-secret
           readinessProbe:
             httpGet:
