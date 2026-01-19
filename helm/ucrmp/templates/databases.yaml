@@ -34,7 +34,7 @@ spec:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ucrmp-secrets
+                  name: ucrmp-platform-secrets
                   key: mysql-root-password
             - name: MYSQL_DATABASE
               valueFrom:
@@ -92,7 +92,7 @@ spec:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ucrmp-secrets
+                  name: ucrmp-platform-secrets
                   key: mysql-root-password
             - name: MYSQL_DATABASE
               valueFrom:
