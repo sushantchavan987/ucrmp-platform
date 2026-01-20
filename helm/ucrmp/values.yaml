@@ -7,5 +7,5 @@ images:
   claim: "sushantc041/ucrmp-claim:6abf983"
   discovery: "sushantc041/ucrmp-discovery-service:aeca6e7"
   gateway: "sushantc041/ucrmp-gateway:aeca6e7"
-  frontend: "sushantc041/ucrmp-frontend:aeca6e7"
+  frontend: "sushantc041/ucrmp-frontend:fcb7ac2"
   mysql: "mysql:8.0"
