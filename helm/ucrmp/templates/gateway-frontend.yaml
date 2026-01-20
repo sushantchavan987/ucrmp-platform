@@ -44,7 +44,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ucrmp-platform-secrets
-                  key: jwt-secret
+                  key: jwtSecret
 
 # --- FRONTEND ---
 ---

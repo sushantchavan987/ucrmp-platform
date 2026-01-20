@@ -35,7 +35,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ucrmp-platform-secrets
-                  key: mysql-root-password
+                  key: mysqlRoot
             - name: MYSQL_DATABASE
               valueFrom:
                 configMapKeyRef:
@@ -93,7 +93,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ucrmp-platform-secrets
-                  key: mysql-root-password
+                  key: mysqlRoot
             - name: MYSQL_DATABASE
               valueFrom:
                 configMapKeyRef:
