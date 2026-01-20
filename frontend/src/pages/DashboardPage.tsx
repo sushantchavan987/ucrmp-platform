@@ -9,11 +9,14 @@ import { FileText, Clock, Plus, TrendingUp, RefreshCw } from 'lucide-react';
 import { formatCurrency, logger, cn } from '../lib/utils';
 import { useTitle } from '../hooks/useTitle';
 import { StatCard } from '../components/dashboard/StatCard';
-import { ClaimsTable } from '../components/dashboard/ClaimsTable'; // ✅ Import Table
+import { ClaimsTable } from '../components/dashboard/ClaimsTable';
+import { AxiosError } from 'axios';
 
 const DashboardPage = () => {
   useTitle('Dashboard');
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token); // ✅ Access token for debugging
+  
   const displayName = user?.firstName 
     ? `${user.firstName} ${user.lastName}` 
     : (user?.sub || user?.email || 'User');
@@ -22,17 +25,22 @@ const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // ✅ LOGIC: Optimized Data Fetching
+  // ✅ LOGIC: Optimized Data Fetching with Debugging
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError('');
     
+    // 🔍 DEBUG: Verify we actually have a token before asking the backend
+    if (!token) {
+      logger.warn("⚠️ [Dashboard] No token found in store. Waiting for auth...");
+      return; 
+    }
+
+    console.log(`🔥 [Dashboard] Fetching claims... (Token starts with: ${token.substring(0, 10)}...)`);
+
     const controller = new AbortController();
 
     try {
-      // 🚀 PERFORMANCE FIX: Removed artificial setTimeout
-      // The app will now feel instant on fast networks.
-      
       const data = await claimService.getMyClaims();
       
       if (!controller.signal.aborted) {
@@ -44,12 +52,20 @@ const DashboardPage = () => {
           });
           
           setClaims(sortedData);
-          logger.info(`📱 [UI] Loaded ${data.length} claims`);
+          logger.info(`✅ [Dashboard] Loaded ${data.length} claims`);
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-          logger.error("Failed to fetch claims", err);
-          setError("Failed to load your claims. Please check your connection.");
+          const axiosError = err as AxiosError;
+          logger.error("❌ [Dashboard] API Failed:", axiosError);
+
+          if (axiosError.response?.status === 401) {
+            setError("Session expired or invalid. Please login again.");
+          } else if (axiosError.code === "ERR_NETWORK") {
+            setError("Cannot connect to server. Is the backend running?");
+          } else {
+            setError("Failed to load your claims. Please try again.");
+          }
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -58,7 +74,7 @@ const DashboardPage = () => {
     }
 
     return () => controller.abort();
-  }, []);
+  }, [token]);
 
   // Initial Load
   useEffect(() => {
@@ -149,7 +165,6 @@ const DashboardPage = () => {
                 </Button>
             </div>
         ) : (
-            // ✅ CLEAN: The Dashboard just passes data. The Table handles rendering.
             <ClaimsTable claims={claims} />
         )}
       </div>

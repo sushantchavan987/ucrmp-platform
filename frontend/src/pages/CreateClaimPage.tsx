@@ -7,7 +7,7 @@ import { createClaimSchema, type CreateClaimFormData } from '../lib/schemas';
 import { claimService } from '../services/claimService';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select'; // ✅ Import New Component
+import { Select } from '../components/ui/Select'; 
 import { TravelFields } from '../components/claims/TravelFields';
 import { MedicalFields } from '../components/claims/MedicalFields';
 import { Plane, Stethoscope, PartyPopper, ArrowLeft } from 'lucide-react';
@@ -15,7 +15,6 @@ import { useTitle } from '../hooks/useTitle';
 import { logger } from '../lib/utils';
 import { CLAIM_TYPES, CLAIM_TYPE_OPTIONS } from '../utils/constants';
 
-// start
 const CreateClaimPage = () => {
   useTitle('New Claim');
   const navigate = useNavigate();
@@ -35,18 +34,30 @@ const CreateClaimPage = () => {
   const claimType = useWatch({ control: methods.control, name: 'claimType' });
 
   const onSubmit = async (data: CreateClaimFormData) => {
-    logger.info("📝 Submitting claim", data);
-    await toast.promise(
-      claimService.createClaim(data),
-      {
-        loading: 'Submitting claim...',
-        success: () => {
-           setTimeout(() => navigate('/dashboard'), 1000);
-           return 'Claim submitted successfully!';
-        },
-        error: 'Failed to submit. Try again.'
-      }
-    );
+    logger.info("📝 [CreateClaim] Submitting payload:", data);
+    
+    try {
+        await toast.promise(
+            claimService.createClaim(data),
+            {
+                loading: 'Submitting claim...',
+                success: () => {
+                   logger.info("✅ [CreateClaim] Success!");
+                   // Delay navigation slightly so user sees the success message
+                   setTimeout(() => navigate('/dashboard'), 1000);
+                   return 'Claim submitted successfully!';
+                },
+                error: (err) => {
+                    logger.error("❌ [CreateClaim] Failed:", err);
+                    return 'Failed to submit. Check console details.';
+                }
+            }
+        );
+    } catch (error) {
+        // This catch block might not be reached if toast handles it, 
+        // but it's good safety.
+        console.error(error);
+    }
   };
 
   useEffect(() => { logger.info("📱 [UI] Create Claim Page Mounted"); }, []);
@@ -88,7 +99,6 @@ const CreateClaimPage = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* ✅ REPLACED HARDCODED HTML WITH SELECT COMPONENT */}
                 <Select
                   label="Claim Category"
                   options={CLAIM_TYPE_OPTIONS}

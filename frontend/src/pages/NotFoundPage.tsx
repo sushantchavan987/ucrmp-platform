@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Home, SearchX, LayoutDashboard } from 'lucide-react';
-import { useAuthStore } from '../store/authStore'; // ✅ Import Store
+import { useAuthStore } from '../store/authStore';
 
 const NotFoundPage = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
