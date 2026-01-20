@@ -15,12 +15,10 @@ import { logger } from '../lib/utils';
 const LoginPage = () => {
   useTitle('Sign In');
   const navigate = useNavigate();
-  const location = useLocation(); // ✅ Hook to catch state
+  const location = useLocation();
   const login = useAuthStore((state) => state.login);
 
-  // ✅ LOGIC: Determine where to send the user after login
-  // If they were kicked from /create-claim, send them back there.
-  // Otherwise, default to /dashboard.
+  // Determine where to redirect after login (default to dashboard)
   const from = location.state?.from?.pathname || "/dashboard";
 
   const { 
@@ -29,33 +27,74 @@ const LoginPage = () => {
     formState: { errors, isSubmitting } 
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    mode: "onBlur" // Validate on blur (Polite UX)
+    mode: "onBlur"
   });
 
   const onSubmit = async (data: LoginFormData) => {
     try {
+      logger.info("🚀 [Login] Attempting login for:", data.email);
+      
       const response = await authService.login(data);
-      login(response.token);
+
+      // 🔍 DEBUGGING: See exactly what the backend sent
+      console.log("🔥 [DEBUG] Raw Backend Response:", response);
+
+      // ✅ ROBUST TOKEN EXTRACTION
+      // Checks for 'token', 'accessToken', or if the response itself is the string
+      // Also handles cases where Axios might return the full object (response.data)
+      // @ts-ignore - responding to dynamic backend data
+      const token = response?.token || 
+                    // @ts-ignore
+                    response?.accessToken || 
+                    // @ts-ignore
+                    response?.data?.token ||
+                    (typeof response === 'string' ? response : null);
+
+      console.log("🔥 [DEBUG] Extracted Token:", token);
+
+      if (!token) {
+        console.error("❌ [Login] Token is undefined. Backend response structure mismatch.");
+        toast.error("Login successful, but token missing. Check console.");
+        return;
+      }
+
+      // 1. Save to Store (LocalStorage + State)
+      login(token);
+      
+      // 2. Success Feedback
       toast.success("Welcome back!", { duration: 3000 });
       
-      // ✅ REDIRECT: Go to the intended destination
+      // 3. Redirect
+      console.log("➡️ [Login] Redirecting to:", from);
       navigate(from, { replace: true });
       
     } catch (err) {
       const error = err as AxiosError;
-      logger.error("Login failed", error);
-      toast.error("Invalid email or password");
+      logger.error("❌ [Login] Failed:", error);
+      
+      // Friendly error message based on status code
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Invalid email or password");
+      } else if (error.code === "ERR_NETWORK") {
+        toast.error("Unable to connect to server. Is the backend running?");
+      } else {
+        toast.error("Something went wrong. Please try again.");
+      }
     }
   };
 
-  useEffect(() => { logger.info("📱 [UI] Login Page Mounted"); }, []);
+  useEffect(() => { 
+    logger.info("📱 [UI] Login Page Mounted"); 
+    // Clear any existing stale sessions when landing on login page
+    // useAuthStore.getState().logout(); 
+  }, []);
 
   return (
     <div className="w-full max-w-[450px] bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl shadow-slate-200/50 p-8 border border-white/20 ring-1 ring-slate-900/5">
       
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 mb-4">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
         </div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome Back</h1>
         <p className="text-slate-500 mt-2 text-sm">Sign in to access your workspace</p>
@@ -65,9 +104,9 @@ const LoginPage = () => {
         
         <Input
           label="Email Address"
-          autoFocus // Start typing immediately
+          autoFocus
           type="email"
-          disabled={isSubmitting} // ✅ Freeze form while loading
+          disabled={isSubmitting}
           placeholder="admin@ucrmp.com"
           {...register('email')}
           error={errors.email?.message}
@@ -76,7 +115,7 @@ const LoginPage = () => {
         <Input
           label="Password"
           type="password"
-          disabled={isSubmitting} // ✅ Freeze form while loading
+          disabled={isSubmitting}
           placeholder="••••••••"
           {...register('password')}
           error={errors.password?.message}
