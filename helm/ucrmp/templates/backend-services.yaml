@@ -99,7 +99,7 @@ spec:
                 secretKeyRef:
                   name: ucrmp-platform-secrets
                   key: mysqlRoot
-            - name: jwtSecret
+            - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: ucrmp-platform-secrets
