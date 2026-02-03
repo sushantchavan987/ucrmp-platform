@@ -27,7 +27,7 @@ The system is built on the **"Smart Gateway, Dumb Services"** pattern:
 ---
 
 ## 📂 Repository Structure
-
+```text
 ucrmp-platform/
 ├── backend/                  # Java Spring Boot Microservices
 │   ├── api-gateway/          # Spring Cloud Gateway (Port 8080)
@@ -53,7 +53,7 @@ ucrmp-platform/
 │   └── 04-backend/           # Microservice Deployments
 │
 └── kind-config.yaml          # Local Cluster Configuration
-
+```
 ---
 
 ## 🛠️ Technology Stack
